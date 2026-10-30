@@ -9,6 +9,11 @@ CORS(app)
 DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
+# ---> Rota principal adicionada aqui <---
+@app.route("/")
+def home():
+    return send_from_directory(".", "index.html")
+
 @app.route("/api/info", methods=["POST"])
 def get_info():
     data = request.json
