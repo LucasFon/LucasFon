@@ -9,7 +9,6 @@ CORS(app)
 DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
-# ---> Rota principal adicionada aqui <---
 @app.route("/")
 def home():
     return send_from_directory(".", "index.html")
@@ -24,7 +23,7 @@ def get_info():
         ydl_opts = {
             "quiet": True,
             "no_warnings": True,
-            "js_runtimes": {"node": "node"}
+            "js_runtimes": {"node": {}}
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -60,7 +59,7 @@ def download():
             "format": "bestaudio/best",
             "outtmpl": os.path.join(DOWNLOAD_FOLDER, "%(id)s.%(ext)s"),
             "restrictfilenames": True,
-            "js_runtimes": {"node": "node"},
+            "js_runtimes": {"node": {}},
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
@@ -72,7 +71,7 @@ def download():
             "format": format_id if format_id else "bestvideo+bestaudio/best",
             "outtmpl": os.path.join(DOWNLOAD_FOLDER, "%(id)s.%(ext)s"),
             "restrictfilenames": True,
-            "js_runtimes": {"node": "node"},
+            "js_runtimes": {"node": {}},
         }
 
     try:
