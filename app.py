@@ -23,7 +23,12 @@ def get_info():
         ydl_opts = {
             "quiet": True,
             "no_warnings": True,
-            "js_runtimes": {"node": {}}
+            "js_runtimes": {"node": {}},
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "web"]
+                }
+            }
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -60,6 +65,11 @@ def download():
             "outtmpl": os.path.join(DOWNLOAD_FOLDER, "%(id)s.%(ext)s"),
             "restrictfilenames": True,
             "js_runtimes": {"node": {}},
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "web"]
+                }
+            },
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
@@ -72,6 +82,11 @@ def download():
             "outtmpl": os.path.join(DOWNLOAD_FOLDER, "%(id)s.%(ext)s"),
             "restrictfilenames": True,
             "js_runtimes": {"node": {}},
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "web"]
+                }
+            }
         }
 
     try:
