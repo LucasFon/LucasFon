@@ -1,5 +1,5 @@
 import os
-from urllib.parse import urlparse
+from urllib.parse import quote
 from flask import Flask, request, jsonify, send_from_directory, url_for
 from flask_cors import CORS
 import yt_dlp
@@ -10,8 +10,34 @@ CORS(app)
 DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
+def get_clean_proxy():
+    proxy_str = os.environ.get("PROXY_URL", "").strip()
+    if not proxy_str:
+        return None
+    
+    # Remove prefixos de protocolo para processamento limpo
+    if proxy_str.startswith("http://"):
+        proxy_str = proxy_str[7:]
+    elif proxy_str.startswith("https://"):
+        proxy_str = proxy_str[8:]
+        
+    # Separação manual segura para evitar o erro de IPv6 do Python
+    if "@" in proxy_str:
+        auth, host_port = proxy_str.split("@", 1)
+        if ":" in auth:
+            user, pwd = auth.split(":", 1)
+            user_enc = quote(user, safe='')
+            pwd_enc = quote(pwd, safe='')
+            auth = f"{user_enc}:{pwd_enc}"
+        clean_url = f"http://{auth}@{host_port}"
+    else:
+        clean_url = f"http://{proxy_str}"
+        
+    print(f"[DEBUG] Proxy processado com sucesso.")
+    return clean_url
+
 def get_ydl_opts(extra_opts=None):
-    proxy_url = os.environ.get("PROXY_URL", "").strip()
+    proxy_url = get_clean_proxy()
     
     opts = {
         "quiet": True,
@@ -26,14 +52,7 @@ def get_ydl_opts(extra_opts=None):
     }
     
     if proxy_url:
-        if not proxy_url.startswith("http://") and not proxy_url.startswith("https://"):
-            proxy_url = f"http://{proxy_url}"
-        
-        # Removemos qualquer interpretação ambígua de IPv6 limpando o formato para o yt-dlp aceitar sem crashar
         opts["proxy"] = proxy_url
-        print(f"[DEBUG] Proxy configurado com sucesso.")
-    else:
-        print("[AVISO] Nenhum proxy configurado.")
 
     if extra_opts:
         opts.update(extra_opts)
