@@ -16,6 +16,7 @@ def get_ydl_opts(extra_opts=None):
     opts = {
         "quiet": True,
         "no_warnings": True,
+        "socket_timeout": 30,  # Aumenta a tolerância ao tempo de resposta do proxy
         "js_runtimes": {"node": {}},
         "extractor_args": {
             "youtube": {
