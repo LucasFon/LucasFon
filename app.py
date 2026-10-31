@@ -19,13 +19,12 @@ def get_info():
     if not url:
         return jsonify({'error': 'URL não fornecido'}), 400
 
-    # Configurações do yt-dlp integrando o proxy e os cookies locais
+    # Configurações do yt-dlp
     ydl_opts = {
         'format': 'best',
-        'cookiefile': 'cookies.txt',  # Força a leitura do ficheiro de cookies na raiz
+        'cookiefile': 'cookies.txt',
     }
 
-    # Adiciona o proxy se estiver definido nas variáveis de ambiente
     if PROXY_URL:
         ydl_opts['proxy'] = PROXY_URL
 
@@ -40,6 +39,7 @@ def get_info():
             }
             return jsonify(video_info)
     except Exception as e:
+        # Devolve o erro exato no JSON para sabermos o que se passa caso volte a falhar
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/download', methods=['POST'])
@@ -55,7 +55,7 @@ def download_video():
     ydl_opts = {
         'format': 'best',
         'outtmpl': output_template,
-        'cookiefile': 'cookies.txt',  # Garante a autenticação via cookies no download
+        'cookiefile': 'cookies.txt',
     }
 
     if PROXY_URL:
