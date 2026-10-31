@@ -9,14 +9,14 @@ CORS(app)
 DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
-# Lê o proxy de forma segura a partir das variáveis de ambiente do Render
-PROXY_URL = os.environ.get("PROXY_URL", None)
+# Lê e limpa o proxy das variáveis de ambiente do Render
+PROXY_URL = os.environ.get("PROXY_URL", "").strip()
 
 def get_ydl_opts(extra_opts=None):
     opts = {
         "quiet": True,
         "no_warnings": True,
-        "socket_timeout": 30,  # Aumenta a tolerância ao tempo de resposta do proxy
+        "socket_timeout": 30,
         "js_runtimes": {"node": {}},
         "extractor_args": {
             "youtube": {
@@ -26,10 +26,15 @@ def get_ydl_opts(extra_opts=None):
     }
     
     if PROXY_URL:
-        opts["proxy"] = PROXY_URL
-        print(f"[INFO] A usar proxy configurado: {PROXY_URL[:15]}...")
+        # Garante que o protocolo http:// está explícito para evitar erros de sintaxe IPv6
+        proxy_clean = PROXY_URL
+        if not proxy_clean.startswith("http://") and not proxy_clean.startswith("https://"):
+            proxy_clean = f"http://{proxy_clean}"
+        
+        opts["proxy"] = proxy_clean
+        print(f"[INFO] A usar proxy configurado com sucesso.")
     else:
-        print("[AVISO] NENHUM PROXY CONFIGURADO! A ligar com IP direto do Render.")
+        print("[AVISO] NENHUM PROXY CONFIGURADO!")
 
     if extra_opts:
         opts.update(extra_opts)
