@@ -24,8 +24,13 @@ def get_ydl_opts(extra_opts=None):
             }
         }
     }
+    
     if PROXY_URL:
         opts["proxy"] = PROXY_URL
+        print(f"[INFO] A usar proxy configurado: {PROXY_URL[:15]}...")
+    else:
+        print("[AVISO] NENHUM PROXY CONFIGURADO! A ligar com IP direto do Render.")
+
     if extra_opts:
         opts.update(extra_opts)
     return opts
