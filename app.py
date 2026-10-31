@@ -1,52 +1,14 @@
 import os
-from flask import Flask, request, jsonify, send_file, render_template_string
+from flask import Flask, render_template, request, jsonify, send_file
 import yt_dlp
 
 app = Flask(__name__)
 
 PROXY_URL = os.environ.get('PROXY_URL')
 
-# HTML embutido diretamente para evitar erros de pastas em falta no Render
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="pt">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Baixar Vídeo e Áudio do YouTube</title>
-    <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 400px; text-align: center; }
-        input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        button { background: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 16px; }
-        button:hover { background: #c0392b; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>Baixar Vídeo do YouTube</h2>
-        <p>Cole o link abaixo:</p>
-        <input type="text" id="urlInput" placeholder="https://youtube.com/...">
-        <button onclick="baixar()">Começar</button>
-    </div>
-
-    <script>
-        function baixar() {
-            const url = document.getElementById('urlInput').value;
-            if(!url) {
-                alert('Por favor, insira um link!');
-                return;
-            }
-            alert('A processar o pedido...');
-        }
-    </script>
-</body>
-</html>
-"""
-
 @app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE)
+    return render_template('index.html')
 
 @app.route('/api/info', methods=['POST'])
 def get_info():
