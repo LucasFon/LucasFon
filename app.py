@@ -9,6 +9,26 @@ CORS(app)
 DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
+# Lê o proxy de forma segura a partir das variáveis de ambiente do Render
+PROXY_URL = os.environ.get("PROXY_URL", None)
+
+def get_ydl_opts(extra_opts=None):
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "js_runtimes": {"node": {}},
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["mweb", "android"]
+            }
+        }
+    }
+    if PROXY_URL:
+        opts["proxy"] = PROXY_URL
+    if extra_opts:
+        opts.update(extra_opts)
+    return opts
+
 @app.route("/")
 def home():
     return send_from_directory(".", "index.html")
@@ -20,16 +40,7 @@ def get_info():
     if not url:
         return jsonify({"error": "URL nao fornecida"}), 400
     try:
-        ydl_opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "js_runtimes": {"node": {}},
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["mweb", "android"]
-                }
-            }
-        }
+        ydl_opts = get_ydl_opts()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             formats = []
@@ -60,34 +71,22 @@ def download():
         return jsonify({"error": "URL necessaria"}), 400
 
     if download_type == "audio":
-        ydl_opts = {
+        ydl_opts = get_ydl_opts({
             "format": "bestaudio/best",
             "outtmpl": os.path.join(DOWNLOAD_FOLDER, "%(id)s.%(ext)s"),
             "restrictfilenames": True,
-            "js_runtimes": {"node": {}},
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["mweb", "android"]
-                }
-            },
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
                 "preferredquality": "192",
             }],
-        }
+        })
     else:
-        ydl_opts = {
+        ydl_opts = get_ydl_opts({
             "format": format_id if format_id else "bestvideo+bestaudio/best",
             "outtmpl": os.path.join(DOWNLOAD_FOLDER, "%(id)s.%(ext)s"),
             "restrictfilenames": True,
-            "js_runtimes": {"node": {}},
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["mweb", "android"]
-                }
-            }
-        }
+        })
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
