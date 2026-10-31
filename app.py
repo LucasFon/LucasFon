@@ -26,7 +26,7 @@ def get_info():
             "js_runtimes": {"node": {}},
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "web"]
+                    "player_client": ["tv"]
                 }
             }
         }
@@ -67,7 +67,7 @@ def download():
             "js_runtimes": {"node": {}},
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "web"]
+                    "player_client": ["tv"]
                 }
             },
             "postprocessors": [{
@@ -84,7 +84,7 @@ def download():
             "js_runtimes": {"node": {}},
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "web"]
+                    "player_client": ["tv"]
                 }
             }
         }
