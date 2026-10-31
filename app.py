@@ -4,7 +4,6 @@ import yt_dlp
 
 app = Flask(__name__)
 
-# Lê o proxy configurado nas variáveis de ambiente do Render
 PROXY_URL = os.environ.get('PROXY_URL')
 
 @app.route('/')
@@ -19,10 +18,8 @@ def get_info():
     if not url:
         return jsonify({'error': 'URL não fornecido'}), 400
 
-    # Configurações do yt-dlp
     ydl_opts = {
         'format': 'best',
-        'cookiefile': 'cookies.txt',
     }
 
     if PROXY_URL:
@@ -39,7 +36,6 @@ def get_info():
             }
             return jsonify(video_info)
     except Exception as e:
-        # Devolve o erro exato no JSON para sabermos o que se passa caso volte a falhar
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/download', methods=['POST'])
@@ -55,7 +51,6 @@ def download_video():
     ydl_opts = {
         'format': 'best',
         'outtmpl': output_template,
-        'cookiefile': 'cookies.txt',
     }
 
     if PROXY_URL:
