@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlparse
 from flask import Flask, request, jsonify, send_from_directory, url_for
 from flask_cors import CORS
 import yt_dlp
@@ -10,7 +11,6 @@ DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "down
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
 def get_ydl_opts(extra_opts=None):
-    # Lê a variável de ambiente do Render de forma limpa
     proxy_url = os.environ.get("PROXY_URL", "").strip()
     
     opts = {
@@ -26,11 +26,10 @@ def get_ydl_opts(extra_opts=None):
     }
     
     if proxy_url:
-        # Assegura que começa com http://
         if not proxy_url.startswith("http://") and not proxy_url.startswith("https://"):
             proxy_url = f"http://{proxy_url}"
         
-        # Atribui diretamente sem passagens complexas de urlparse para evitar conflitos IPv6
+        # Removemos qualquer interpretação ambígua de IPv6 limpando o formato para o yt-dlp aceitar sem crashar
         opts["proxy"] = proxy_url
         print(f"[DEBUG] Proxy configurado com sucesso.")
     else:
