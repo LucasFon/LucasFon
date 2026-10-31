@@ -9,10 +9,10 @@ CORS(app)
 DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
-# Lê e limpa o proxy das variáveis de ambiente do Render
-PROXY_URL = os.environ.get("PROXY_URL", "").strip()
-
 def get_ydl_opts(extra_opts=None):
+    # Lê a variável diretamente dentro da função para garantir que não falha no arranque
+    proxy_url = os.environ.get("PROXY_URL", "").strip()
+    
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -25,16 +25,13 @@ def get_ydl_opts(extra_opts=None):
         }
     }
     
-    if PROXY_URL:
-        # Garante que o protocolo http:// está explícito para evitar erros de sintaxe IPv6
-        proxy_clean = PROXY_URL
-        if not proxy_clean.startswith("http://") and not proxy_clean.startswith("https://"):
-            proxy_clean = f"http://{proxy_clean}"
-        
-        opts["proxy"] = proxy_clean
-        print(f"[INFO] A usar proxy configurado com sucesso.")
+    if proxy_url:
+        if not proxy_url.startswith("http://") and not proxy_url.startswith("https://"):
+            proxy_url = f"http://{proxy_url}"
+        opts["proxy"] = proxy_url
+        print(f"[DEBUG] Proxy injetado com sucesso nas opções do yt-dlp.")
     else:
-        print("[AVISO] NENHUM PROXY CONFIGURADO!")
+        print("[AVISO CRÍTICO] Nenhuma PROXY_URL detetada pelo ambiente!")
 
     if extra_opts:
         opts.update(extra_opts)
