@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote, urlparse, urlunparse
 from flask import Flask, request, jsonify, send_from_directory, url_for
 from flask_cors import CORS
 import yt_dlp
@@ -9,9 +10,33 @@ CORS(app)
 DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
+def get_clean_proxy():
+    proxy_str = os.environ.get("PROXY_URL", "").strip()
+    if not proxy_str:
+        return None
+    
+    # Garante o protocolo base
+    if not proxy_str.startswith("http://") and not proxy_str.startswith("https://"):
+        proxy_str = f"http://{proxy_str}"
+        
+    try:
+        parsed = urlparse(proxy_str)
+        # Codifica o utilizador e a senha para evitar conflitos com carateres especiais e múltiplos dois pontos
+        if parsed.username or parsed.password:
+            user = quote(parsed.username) if parsed.username else ""
+            pwd = quote(parsed.password) if parsed.password else ""
+            netloc = f"{user}:{pwd}@{parsed.hostname}"
+            if parsed.port:
+                netloc += f":{parsed.port}"
+            parsed = parsed._replace(netloc=netloc)
+            return urlunparse(parsed)
+    except Exception as e:
+        print(f"[AVISO] Erro ao formatar proxy: {e}")
+        
+    return proxy_str
+
 def get_ydl_opts(extra_opts=None):
-    # Lê a variável diretamente dentro da função para garantir que não falha no arranque
-    proxy_url = os.environ.get("PROXY_URL", "").strip()
+    proxy_url = get_clean_proxy()
     
     opts = {
         "quiet": True,
@@ -26,12 +51,10 @@ def get_ydl_opts(extra_opts=None):
     }
     
     if proxy_url:
-        if not proxy_url.startswith("http://") and not proxy_url.startswith("https://"):
-            proxy_url = f"http://{proxy_url}"
         opts["proxy"] = proxy_url
-        print(f"[DEBUG] Proxy injetado com sucesso nas opções do yt-dlp.")
+        print(f"[DEBUG] Proxy formatado e injetado com sucesso.")
     else:
-        print("[AVISO CRÍTICO] Nenhuma PROXY_URL detetada pelo ambiente!")
+        print("[AVISO] Nenhum proxy detetado.")
 
     if extra_opts:
         opts.update(extra_opts)
