@@ -199,16 +199,24 @@ def get_info():
     if not url:
         return jsonify({'error': 'URL não fornecido'}), 400
 
-    ydl_opts = {'format': 'best'}
+    ydl_opts = {
+        'format': 'best',
+        'quiet': True,
+        'no_warnings': True,
+    }
+
     if PROXY_URL:
         ydl_opts['proxy'] = PROXY_URL
+
+    if os.path.exists('cookies.txt'):
+        ydl_opts['cookiefile'] = 'cookies.txt'
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return jsonify({
-                'title': info.get('title'),
-                'thumbnail': info.get('thumbnail')
+                'title': info.get('title', 'Vídeo sem título'),
+                'thumbnail': info.get('thumbnail', '')
             })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -238,6 +246,9 @@ def download_file():
 
     if PROXY_URL:
         ydl_opts['proxy'] = PROXY_URL
+
+    if os.path.exists('cookies.txt'):
+        ydl_opts['cookiefile'] = 'cookies.txt'
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
