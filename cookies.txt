@@ -1,27 +1,267 @@
-# Netscape HTTP Cookie File
-# https://curl.haxx.se/rfc/cookie_spec.html
-# This is a generated file! Do not edit.
+import os
+from flask import Flask, request, jsonify, send_file, render_template_string
+import yt_dlp
 
-.youtube.com	TRUE	/	TRUE	1828036775	PREF	tz=America.Sao_Paulo&f7=100
-.youtube.com	TRUE	/	TRUE	1807388107	__Secure-BUCKET	CLoC
-.youtube.com	TRUE	/	TRUE	1826461835	LOGIN_INFO	AFmmF2swRAIgB384TjXti-wbOWCHNJpfDyf1AMZFg9XRiA83ztOh7vUCIBnXy0ygPz__DOv9W8IxiaYF9W70m0_WL1Ot3LBdGlBs:QUQ3MjNmeV83bm9qTkpSX2JlOXBHVktFRDV0cHR1R0o5THRCLWlEaHJpOVVFNjBjclZlR3dxSkstTlVHSUhxUGJKaW9TaTVNcEQ1emY3RUhmYU1vRHJjalJKc1VKeDBjVE1Ya1JsdDR5TGk5aHV4Z0NzMlh2TVJzWVFUaEFZdlpBNkRDaFdwZ1R4YUFtYlBpMDhweGoycmZQeTFOWHk0Undn
-.youtube.com	TRUE	/	FALSE	1827961532	HSID	ApkkwtLechnojDtQV
-.youtube.com	TRUE	/	TRUE	1827961532	SSID	AoU5pvLYMHtfbwy4g
-.youtube.com	TRUE	/	FALSE	1827961532	APISID	ZXpgFv5Cx-ivjisS/AQ0JBpYovRQIOF1EN
-.youtube.com	TRUE	/	TRUE	1827961532	SAPISID	EJrvLdmJF8Iuv4MF/AIxbxZbcg1zPOVPyN
-.youtube.com	TRUE	/	TRUE	1827961532	__Secure-1PAPISID	EJrvLdmJF8Iuv4MF/AIxbxZbcg1zPOVPyN
-.youtube.com	TRUE	/	TRUE	1827961532	__Secure-3PAPISID	EJrvLdmJF8Iuv4MF/AIxbxZbcg1zPOVPyN
-.youtube.com	TRUE	/	FALSE	1827961532	SID	g.a000EQnK5ACwIf67Sz8wwJ1D80eYxMcDFfj4xWkHcKU1R4dn4BkRFzWkftAMEH2avtWCuU1A0QACgYKATcSARASFQHGX2MiCZjLIe0cFLl-4mvpdaiuMhoVAUF8yKoH4Aci6RbftLfdo5TEhLPk0076
-.youtube.com	TRUE	/	TRUE	1827961532	__Secure-1PSID	g.a000EQnK5ACwIf67Sz8wwJ1D80eYxMcDFfj4xWkHcKU1R4dn4BkRaO2wORroBYpvcrgRfn2sQAACgYKAbYSARASFQHGX2MiLfrhJhxjr54jwF6OAs1tbhoVAUF8yKqrspTorsBcEY2F30SErgWr0076
-.youtube.com	TRUE	/	TRUE	1827961532	__Secure-3PSID	g.a000EQnK5ACwIf67Sz8wwJ1D80eYxMcDFfj4xWkHcKU1R4dn4BkRWqSVkpemQ99sFJQ_1uT4kAACgYKAQoSARASFQHGX2MiW0PWcrsTUQGharPZadafkBoVAUF8yKp1bZ7YsJWdRllwRPqolbKP0076
-.youtube.com	TRUE	/	TRUE	1825012423	__Secure-1PSIDTS	sidts-CjIBnJZzatpZOQHjISBrSJcHa8k8y-KpxxDIPe36lABUz59vbkM_y9D7G0PTxCv9l9GwMRAA
-.youtube.com	TRUE	/	TRUE	1825012423	__Secure-3PSIDTS	sidts-CjIBnJZzatpZOQHjISBrSJcHa8k8y-KpxxDIPe36lABUz59vbkM_y9D7G0PTxCv9l9GwMRAA
-.youtube.com	TRUE	/	FALSE	1825012779	SIDCC	APD_SKHKzm4YVPn9cZ7P47-aGgM8aIxvcMMfQpoLjnyD_wu3kHmlWVe1fIvdFTwA7o6m0rkg7w
-.youtube.com	TRUE	/	TRUE	1825012779	__Secure-1PSIDCC	APD_SKHYZRnwhRchjHHm10n0r3zCn4EVxYfiy_qDhRD0QYi9TISJTuzpv5XMbOToH5Cm2DJ65vE
-.youtube.com	TRUE	/	TRUE	1825012779	__Secure-3PSIDCC	APD_SKF6VEbO1qECUYwn6QEVxf5UKFvvAFlY5WEMaBeVXylzzU0p9HeYTZTrjn2RSYcxK-bR7ug
-.youtube.com	TRUE	/	FALSE	1793476792	ST-3opvp5	session_logininfo=AFmmF2swRAIgB384TjXti-wbOWCHNJpfDyf1AMZFg9XRiA83ztOh7vUCIBnXy0ygPz__DOv9W8IxiaYF9W70m0_WL1Ot3LBdGlBs%3AQUQ3MjNmeV83bm9qTkpSX2JlOXBHVktFRDV0cHR1R0o5THRCLWlEaHJpOVVFNjBjclZlR3dxSkstTlVHSUhxUGJKaW9TaTVNcEQ1emY3RUhmYU1vRHJjalJKc1VKeDBjVE1Ya1JsdDR5TGk5aHV4Z0NzMlh2TVJzWVFUaEFZdlpBNkRDaFdwZ1R4YUFtYlBpMDhweGoycmZQeTFOWHk0Undn
-.youtube.com	TRUE	/	TRUE	1809028770	VISITOR_INFO1_LIVE	F_xIeoGX_nA
-.youtube.com	TRUE	/	TRUE	1809028770	VISITOR_PRIVACY_METADATA	CgJCUhIEGgAgRQ%3D%3D
-.youtube.com	TRUE	/	TRUE	1808953532	__Secure-YNID	CusBCAUSnQEBDB6PDFGerIaBpV6FhBA6PmpnGna5hrxWwkLAXKk-y9rB_M-OkaP-r03-i8wl7xh9T1hxLD4sM1F3mQ-j9Zt9zdYqQKE53mW_jrL9oiw4HF4AbZJKjrs_DX6aTvCa6LAX3yVJsyGn9YCVAHGtm4Qm5R5cFG7RjwwVbhqEdMUabg6vJuPYQ7tJc1Clh1_M-fPNGQimJgeuMoEDDXOoKAUyRQEcWPVqJ7q1pmhQVmNIkZq2_wBcoW0E72pOFeFKdG4262Tqyc1ZAg-1WxL8FlexlNTi2jjr0C-9L16ezIcAHFp5Ts1kDQ
-.youtube.com	TRUE	/	TRUE	1808953532	__Secure-ROLLOUT_TOKEN	CMHR5ZfS-PXsLxCincjhl-yVAxji09Sp7eKXAw%3D%3D
-.youtube.com	TRUE	/	TRUE	0	YSC	lkMpPh5dkvU
+app = Flask(__name__)
+
+PROXY_URL = os.environ.get('PROXY_URL')
+DOWNLOAD_FOLDER = 'downloads'
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baixar Vídeo e Áudio do YouTube</title>
+    <!-- Tailwind CSS para estilização -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-8 rounded-xl shadow-md w-full max-w-2xl text-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">Baixar Vídeo e Áudio do YouTube</h1>
+        <p class="text-gray-600 mb-6">Cole o link do YouTube abaixo para converter e baixar em MP3 ou MP4.</p>
+
+        <!-- Formulário para Inserir a URL -->
+        <div class="flex flex-col sm:flex-row gap-3 mb-6">
+            <input 
+                type="text" 
+                id="urlInput" 
+                placeholder="Cole o link do YouTube aqui..." 
+                class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-gray-700"
+            />
+            <button 
+                onclick="buscarInformacoes()" 
+                id="btnBuscar"
+                class="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg transition duration-200"
+            >
+                Começar
+            </button>
+        </div>
+
+        <!-- Mensagens de Estado -->
+        <div id="statusMessage" class="hidden my-4 text-center text-gray-700 font-medium"></div>
+
+        <!-- Resultados (Título, Thumbnail e Botões) -->
+        <div id="resultContainer" class="hidden border-t pt-6 text-left">
+            <div class="flex flex-col md:flex-row gap-4 items-center mb-6">
+                <img id="videoThumb" class="w-full md:w-48 rounded-lg shadow" src="" alt="Thumbnail do Vídeo">
+                <div>
+                    <h2 id="videoTitle" class="font-bold text-lg text-gray-800"></h2>
+                </div>
+            </div>
+
+            <!-- Botões de Download -->
+            <div class="flex flex-col gap-3">
+                <button 
+                    onclick="fazerDownload('video')" 
+                    id="btnDownloadVideo"
+                    class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg flex justify-between items-center transition duration-200"
+                >
+                    <span>Baixar Vídeo (MP4)</span>
+                    <span class="bg-green-800 text-xs px-2 py-1 rounded">HD / SD</span>
+                </button>
+
+                <button 
+                    onclick="fazerDownload('audio')" 
+                    id="btnDownloadAudio"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex justify-between items-center transition duration-200"
+                >
+                    <span>Baixar Áudio (MP3)</span>
+                    <span class="bg-blue-800 text-xs px-2 py-1 rounded">192 kbps</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script de Integração -->
+    <script>
+        const API_BASE = window.location.origin;
+        let currentUrl = "";
+
+        async function buscarInformacoes() {
+            let rawUrl = document.getElementById("urlInput").value.trim();
+            const statusMessage = document.getElementById("statusMessage");
+            const resultContainer = document.getElementById("resultContainer");
+
+            if (!rawUrl) {
+                alert("Por favor, insira um link do YouTube válido.");
+                return;
+            }
+
+            currentUrl = rawUrl;
+
+            resultContainer.classList.add("hidden");
+            statusMessage.classList.remove("hidden", "text-red-600");
+            statusMessage.classList.add("text-gray-700");
+            statusMessage.innerHTML = "Obtendo informações do vídeo...";
+
+            try {
+                const response = await fetch(`${API_BASE}/api/info`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: rawUrl })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Erro ao buscar detalhes do vídeo.");
+                }
+
+                document.getElementById("videoTitle").innerText = data.title;
+                document.getElementById("videoThumb").src = data.thumbnail;
+
+                statusMessage.classList.add("hidden");
+                resultContainer.classList.remove("hidden");
+
+            } catch (err) {
+                statusMessage.classList.remove("text-gray-700");
+                statusMessage.classList.add("text-red-600");
+                statusMessage.innerText = "Erro no processamento: " + err.message;
+            }
+        }
+
+        async function fazerDownload(tipo) {
+            const statusMessage = document.getElementById("statusMessage");
+            const btnVideo = document.getElementById("btnDownloadVideo");
+            const btnAudio = document.getElementById("btnDownloadAudio");
+
+            statusMessage.classList.remove("hidden", "text-red-600");
+            statusMessage.classList.add("text-gray-700");
+            statusMessage.innerText = `A descarregar e a converter ${tipo === 'audio' ? 'áudio (MP3)' : 'vídeo (MP4)'}... Aguarde.`;
+
+            btnVideo.disabled = true;
+            btnAudio.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/download`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        url: currentUrl, 
+                        type: tipo 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Erro ao descarregar o ficheiro.");
+                }
+
+                const downloadLinkComCacheBuster = data.download_link + "?t=" + new Date().getTime();
+
+                const link = document.createElement("a");
+                link.href = downloadLinkComCacheBuster;
+                link.setAttribute("download", data.filename);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                statusMessage.innerText = "Download concluído com sucesso!";
+
+            } catch (err) {
+                statusMessage.classList.remove("text-gray-700");
+                statusMessage.classList.add("text-red-600");
+                statusMessage.innerText = "Erro ao baixar: " + err.message;
+            } finally {
+                btnVideo.disabled = false;
+                btnAudio.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
+"""
+
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/api/info', methods=['POST'])
+def get_info():
+    data = request.get_json()
+    url = data.get('url')
+    
+    if not url:
+        return jsonify({'error': 'URL não fornecido'}), 400
+
+    ydl_opts = {
+        'format': 'best',
+        'quiet': True,
+        'no_warnings': True,
+    }
+
+    if PROXY_URL:
+        ydl_opts['proxy'] = PROXY_URL
+
+    if os.path.exists('cookies.txt'):
+        ydl_opts['cookiefile'] = 'cookies.txt'
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            return jsonify({
+                'title': info.get('title', 'Vídeo sem título'),
+                'thumbnail': info.get('thumbnail', '')
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/download', methods=['POST'])
+def download_file():
+    data = request.get_json()
+    url = data.get('url')
+    tipo = data.get('type', 'video')
+    
+    if not url:
+        return jsonify({'error': 'URL não fornecido'}), 400
+
+    ydl_opts = {
+        'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(id)s.%(ext)s'),
+    }
+
+    if tipo == 'audio':
+        ydl_opts['format'] = 'bestaudio/best'
+        ydl_opts['postprocessors'] = [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }]
+    else:
+        ydl_opts['format'] = 'bestvideo+bestaudio/best'
+
+    if PROXY_URL:
+        ydl_opts['proxy'] = PROXY_URL
+
+    if os.path.exists('cookies.txt'):
+        ydl_opts['cookiefile'] = 'cookies.txt'
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            if tipo == 'audio':
+                filename = os.path.splitext(filename)[0] + '.mp3'
+            
+            basename = os.path.basename(filename)
+            return jsonify({
+                'download_link': f"/download-file/{basename}",
+                'filename': basename
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/download-file/<filename>')
+def serve_file(filename):
+    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
+    if os.path.exists(file_path):
+        return send_file(file_path, as_attachment=True)
+    return jsonify({'error': 'Ficheiro não encontrado'}), 404
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
