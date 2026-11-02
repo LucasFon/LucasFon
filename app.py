@@ -91,16 +91,7 @@ HTML_TEMPLATE = """
                 return;
             }
 
-            let cleanUrl = rawUrl.split(']')[0].trim();
-            if (cleanUrl.includes('http')) {
-                rawUrl = cleanUrl;
-            }
-
-            const match = rawUrl.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-            const videoId = match ? match[1] : rawUrl.trim();
-            const finalUrl = `https://youtu.be/${videoId}`;
-
-            document.getElementById("urlInput").value = finalUrl;
+            currentUrl = rawUrl;
 
             resultContainer.classList.add("hidden");
             statusMessage.classList.remove("hidden", "text-red-600");
@@ -111,7 +102,7 @@ HTML_TEMPLATE = """
                 const response = await fetch(`${API_BASE}/api/info`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ url: finalUrl })
+                    body: JSON.stringify({ url: rawUrl })
                 });
 
                 const data = await response.json();
@@ -120,7 +111,6 @@ HTML_TEMPLATE = """
                     throw new Error(data.error || "Erro ao buscar detalhes do vídeo.");
                 }
 
-                currentUrl = finalUrl;
                 document.getElementById("videoTitle").innerText = data.title;
                 document.getElementById("videoThumb").src = data.thumbnail;
 
