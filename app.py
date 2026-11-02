@@ -1,5 +1,14 @@
+import os
+from flask import Flask, render_template, request, jsonify, send_file
+import yt_dlp
+
+app = Flask(__name__)
+
+PROXY_URL = os.environ.get('PROXY_URL')
+
+@app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE)
+    return render_template('index.html')
 
 @app.route('/api/info', methods=['POST'])
 def get_info():
