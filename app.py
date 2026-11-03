@@ -225,14 +225,15 @@ def download_file():
     }
 
     if tipo == 'audio':
-        ydl_opts['format'] = 'bestaudio/best'
+        ydl_opts['format'] = 'ba'
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }]
     else:
-        ydl_opts['format'] = 'bestvideo+bestaudio/best'
+        # Formato otimizado e flexível para juntar vídeo e áudio com o FFmpeg
+        ydl_opts['format'] = 'bv*+ba/b'
 
     if PROXY_URL:
         ydl_opts['proxy'] = PROXY_URL
