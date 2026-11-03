@@ -8,6 +8,9 @@ PROXY_URL = os.environ.get('PROXY_URL')
 DOWNLOAD_FOLDER = 'downloads'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
+# Caminho absoluto seguro para o cookies.txt na mesma pasta do app.py
+COOKIE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies.txt')
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -198,8 +201,8 @@ def get_info():
     if PROXY_URL:
         ydl_opts['proxy'] = PROXY_URL
 
-    if os.path.exists('cookies.txt'):
-        ydl_opts['cookiefile'] = 'cookies.txt'
+    if os.path.exists(COOKIE_PATH):
+        ydl_opts['cookiefile'] = COOKIE_PATH
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -232,14 +235,13 @@ def download_file():
             'preferredquality': '192',
         }]
     else:
-        # Formato otimizado e flexível para juntar vídeo e áudio com o FFmpeg
         ydl_opts['format'] = 'bv*+ba/b'
 
     if PROXY_URL:
         ydl_opts['proxy'] = PROXY_URL
 
-    if os.path.exists('cookies.txt'):
-        ydl_opts['cookiefile'] = 'cookies.txt'
+    if os.path.exists(COOKIE_PATH):
+        ydl_opts['cookiefile'] = COOKIE_PATH
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
