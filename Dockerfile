@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# Instalar o FFmpeg necessário para conversão de áudio/vídeo
+# Instalar o FFmpeg (essencial para o yt-dlp juntar áudio e vídeo)
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 5000
+EXPOSE 10000
 
-CMD ["python", "app.py"]
+# Iniciar a aplicação em produção utilizando o Gunicorn
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:10000"]
