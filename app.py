@@ -1,30 +1,15 @@
 import os
-import sys
-import uuid
-import subprocess
-
-# --- MECANISMO DE DEFESA CONTRA COMPILAÇÃO FALHA NO RENDER ---
-# Força a verificação e instalação do yt-dlp caso ele falte no ambiente do Render
-try:
-    import yt_dlp
-except ImportError:
-    print("⚠️ yt-dlp não encontrado! Tentando instalar dinamicamente...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"])
-    import yt_dlp
-
 from flask import Flask, request, jsonify, send_file, render_template_string
+import yt_dlp
 
 app = Flask(__name__)
 
-# Configurações de pastas e caminhos no Render
 PROXY_URL = os.environ.get('PROXY_URL')
-DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'downloads')
+DOWNLOAD_FOLDER = 'downloads'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
+# Caminho absoluto seguro para o cookies.txt na mesma pasta do app.py
 COOKIE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies.txt')
-
-# Dicionário na memória para mapear os IDs únicos gerados aos nomes reais dos arquivos
-file_mapping = {}
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -33,8 +18,8 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Baixar Vídeo e Áudio do YouTube</title>
-    <!-- Tailwind CSS Oficial via CDN -->
-    <script src="https://tailwindcss.com"></script>
+    <!-- Tailwind CSS para estilização -->
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
 
@@ -79,7 +64,7 @@ HTML_TEMPLATE = """
                     class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg flex justify-between items-center transition duration-200"
                 >
                     <span>Baixar Vídeo (MP4)</span>
-                    <span class="bg-green-800 text-xs px-2 py-1 rounded">Alta Qualidade</span>
+                    <span class="bg-green-800 text-xs px-2 py-1 rounded">HD / SD</span>
                 </button>
 
                 <button 
@@ -94,7 +79,7 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
-    <!-- Script de Integração Frontend -->
+    <!-- Script de Integração -->
     <script>
         const API_BASE = window.location.origin;
         let currentUrl = "";
@@ -110,6 +95,7 @@ HTML_TEMPLATE = """
             }
 
             currentUrl = rawUrl;
+
             resultContainer.classList.add("hidden");
             statusMessage.classList.remove("hidden", "text-red-600");
             statusMessage.classList.add("text-gray-700");
@@ -123,6 +109,7 @@ HTML_TEMPLATE = """
                 });
 
                 const data = await response.json();
+
                 if (!response.ok) {
                     throw new Error(data.error || "Erro ao buscar detalhes do vídeo.");
                 }
@@ -147,7 +134,7 @@ HTML_TEMPLATE = """
 
             statusMessage.classList.remove("hidden", "text-red-600");
             statusMessage.classList.add("text-gray-700");
-            statusMessage.innerText = `Processando e convertendo o ${tipo === 'audio' ? 'áudio (MP3)' : 'vídeo (MP4)'}... Aguarde alguns instantes.`;
+            statusMessage.innerText = `A descarregar e a converter ${tipo === 'audio' ? 'áudio (MP3)' : 'vídeo (MP4)'}... Aguarde.`;
 
             btnVideo.disabled = true;
             btnAudio.disabled = true;
@@ -163,14 +150,21 @@ HTML_TEMPLATE = """
                 });
 
                 const data = await response.json();
+
                 if (!response.ok) {
-                    throw new Error(data.error || "Erro ao gerar arquivo para download.");
+                    throw new Error(data.error || "Erro ao descarregar o ficheiro.");
                 }
 
-                statusMessage.innerText = "Download concluído com sucesso! Iniciando transferência...";
-                
-                // Redireciona de forma invisível para o navegador começar a receber o arquivo bruto
-                window.location.href = `${API_BASE}/api/get-file/${data.file_id}`;
+                const downloadLinkComCacheBuster = data.download_link + "?t=" + new Date().getTime();
+
+                const link = document.createElement("a");
+                link.href = downloadLinkComCacheBuster;
+                link.setAttribute("download", data.filename);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                statusMessage.innerText = "Download concluído com sucesso!";
 
             } catch (err) {
                 statusMessage.classList.remove("text-gray-700");
@@ -186,73 +180,99 @@ HTML_TEMPLATE = """
 </html>
 """
 
-def obter_opcoes_base():
-    """Gera dicionário base com cabeçalhos contra bloqueios do YouTube"""
-    opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-        }
-    }
-    if PROXY_URL:
-        opts['proxy'] = PROXY_URL
-    if os.path.exists(COOKIE_PATH):
-        opts['cookiefile'] = COOKIE_PATH
-    return opts
-
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE)
 
 @app.route('/api/info', methods=['POST'])
 def get_info():
-    data = request.get_json() or {}
+    data = request.get_json()
     url = data.get('url')
     
     if not url:
-        return jsonify({'error': 'URL não fornecida'}), 400
+        return jsonify({'error': 'URL não fornecido'}), 400
 
-    ydl_opts = obter_opcoes_base()
+    ydl_opts = {
+        'format': 'best',
+        'quiet': True,
+        'no_warnings': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+    }
+
+    if PROXY_URL:
+        ydl_opts['proxy'] = PROXY_URL
+
+    if os.path.exists(COOKIE_PATH):
+        ydl_opts['cookiefile'] = COOKIE_PATH
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return jsonify({
-                'title': info.get('title', 'Vídeo do YouTube'),
+                'title': info.get('title', 'Vídeo sem título'),
                 'thumbnail': info.get('thumbnail', '')
             })
     except Exception as e:
-        return jsonify({'error': f'Erro ao obter metadados: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/download', methods=['POST'])
-def download_video():
-    data = request.get_json() or {}
+def download_file():
+    data = request.get_json()
     url = data.get('url')
-    download_type = data.get('type')
-
+    tipo = data.get('type', 'video')
+    
     if not url:
-        return jsonify({'error': 'URL não fornecida'}), 400
+        return jsonify({'error': 'URL não fornecido'}), 400
 
-    file_id = str(uuid.uuid4())
-    ydl_opts = obter_opcoes_base()
-    caminho_base = os.path.join(DOWNLOAD_FOLDER, f"{file_id}.%(ext)s")
+    ydl_opts = {
+        'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(id)s.%(ext)s'),
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+    }
 
-    if download_type == 'audio':
-        ydl_opts.update({
-            'format': 'bestaudio/best',
-            'outtmpl': caminho_base,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-        })
-        extensao_final = "mp3"
+    if tipo == 'audio':
+        ydl_opts['format'] = 'ba'
+        ydl_opts['postprocessors'] = [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }]
     else:
-        ydl_opts.update({
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            'outtmpl': caminho_base,
-            'merge_output_format': 'mp4',
-        })
+        ydl_opts['format'] = 'bv*+ba/b'
+
+    if PROXY_URL:
+        ydl_opts['proxy'] = PROXY_URL
+
+    if os.path.exists(COOKIE_PATH):
+        ydl_opts['cookiefile'] = COOKIE_PATH
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            if tipo == 'audio':
+                filename = os.path.splitext(filename)[0] + '.mp3'
+            
+            basename = os.path.basename(filename)
+            return jsonify({
+                'download_link': f"/download-file/{basename}",
+                'filename': basename
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/download-file/<filename>')
+def serve_file(filename):
+    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
+    if os.path.exists(file_path):
+        return send_file(file_path, as_attachment=True)
+    return jsonify({'error': 'Ficheiro não encontrado'}), 404
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
