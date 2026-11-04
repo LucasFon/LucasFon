@@ -8,14 +8,6 @@ app = Flask(__name__)
 DOWNLOAD_FOLDER = 'downloads'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
-# Lista de instâncias públicas do Invidious para teste automático (fallback)
-INVIDIOUS_INSTANCES = [
-    "https://inv.nadeko.net",
-    "https://invidious.privacyredirect.com",
-    "https://yt.artemislena.eu",
-    "https://invidious.perennialte.ch"
-]
-
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -186,7 +178,7 @@ HTML_TEMPLATE = """
 """
 
 def extract_video_id(url):
-    """Extrai o ID do vídeo de diferentes formatos de URL do YouTube"""
+    """Extrai o ID do vídeo de forma segura, ignorando parâmetros extras como playlists"""
     if 'v=' in url:
         return url.split('v=')[1].split('&')[0]
     elif 'youtu.be/' in url:
@@ -207,11 +199,34 @@ def get_info():
 
     video_id = extract_video_id(url)
 
-    # Tenta percorrer várias instâncias do Invidious até encontrar uma que responda
+    # 1. Obter dinamicamente instâncias ativas do Invidious oficiais
+    instances = []
+    try:
+        res = requests.get("https://api.invidious.io/instances.json?sort_by=type,health", timeout=5)
+        if res.status_code == 200:
+            # Pega as primeiras instâncias HTTPS da lista
+            data_instances = res.json()
+            for item in data_instances:
+                domain = item[0]
+                details = item[1]
+                if details.get('type') == 'https' and details.get('cors'):
+                    instances.append(f"https://{domain}")
+    except Exception:
+        pass
+
+    # Fallback caso a API global falhe
+    if not instances:
+        instances = [
+            "https://invidious.privacyredirect.com",
+            "https://yt.artemislena.eu",
+            "https://invidious.perennialte.ch",
+            "https://inv.nadeko.net"
+        ]
+
     info = None
-    for instance in INVIDIOUS_INSTANCES:
+    for instance in instances[:5]:  # Testa até 5 instâncias ativas
         try:
-            response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=5)
+            response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=4)
             if response.status_code == 200:
                 info = response.json()
                 break
@@ -219,7 +234,7 @@ def get_info():
             continue
 
     if not info:
-        return jsonify({'error': 'Todas as instâncias do Invidious falharam ou estão indisponíveis.'}), 502
+        return jsonify({'error': 'Não foi possível contactar nenhuma instância do Invidious neste momento.'}), 502
 
     thumbnails = info.get('videoThumbnails', [])
     thumb_url = thumbnails[0].get('url', '') if thumbnails else ''
@@ -242,6 +257,7 @@ def download_file():
         'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(id)s.%(ext)s'),
         'quiet': True,
         'no_warnings': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
     }
 
     if tipo == 'audio':
