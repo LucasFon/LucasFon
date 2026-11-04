@@ -1,14 +1,11 @@
 import os
 import requests
 from flask import Flask, request, jsonify, send_file, render_template_string
-import yt_dlp
 
 app = Flask(__name__)
 
 DOWNLOAD_FOLDER = 'downloads'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
-
-COOKIE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies.txt')
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -180,7 +177,7 @@ HTML_TEMPLATE = """
 """
 
 def extract_video_id(url):
-    """Extrai o ID do vídeo de forma segura"""
+    """Extrai o ID do vídeo de forma segura, ignorando parâmetros extras como playlists"""
     if 'v=' in url:
         return url.split('v=')[1].split('&')[0]
     elif 'youtu.be/' in url:
@@ -188,7 +185,7 @@ def extract_video_id(url):
     return url
 
 def get_invidious_instances():
-    """Obtém instâncias ativas do Invidious para os metadados"""
+    """Obtém dinamicamente instâncias ativas do Invidious"""
     instances = []
     try:
         res = requests.get("https://api.invidious.io/instances.json?sort_by=type,health", timeout=4)
@@ -255,39 +252,64 @@ def download_file():
     if not url:
         return jsonify({'error': 'URL não fornecido'}), 400
 
-    # Configuração robusta do yt-dlp com o cliente android/web e suporte a cookies
-    ydl_opts = {
-        'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(id)s.%(ext)s'),
-        'quiet': True,
-        'no_warnings': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-    }
+    video_id = extract_video_id(url)
+    instances = get_invidious_instances()
 
-    if os.path.exists(COOKIE_PATH):
-        ydl_opts['cookiefile'] = COOKIE_PATH
+    stream_url = None
+    video_title = "video"
 
-    if tipo == 'audio':
-        ydl_opts['format'] = 'ba'
-        ydl_opts['postprocessors'] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }]
-    else:
-        ydl_opts['format'] = 'bv*+ba/b'
+    # Percorre as instâncias ativas para encontrar uma que forneça streams de áudio/vídeo válidos
+    for instance in instances[:8]:
+        try:
+            response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=5)
+            if response.status_code == 200:
+                vid_data = response.json()
+                video_title = vid_data.get('title', 'video').replace('/', '_').replace('\\', '_')
+                
+                if tipo == 'audio':
+                    # Procura streams de áudio nos formatos adaptativos
+                    for fmt in vid_data.get('adaptiveFormats', []):
+                        if 'audio' in fmt.get('type', ''):
+                            stream_url = fmt.get('url')
+                            break
+                else:
+                    # Procura streams de vídeo combinados ou adaptativos com alta qualidade
+                    formatos = vid_data.get('formatStreams', [])
+                    if formatos:
+                        stream_url = formatos[-1].get('url')
+                    else:
+                        adaptive = vid_data.get('adaptiveFormats', [])
+                        for fmt in adaptive:
+                            if 'video' in fmt.get('type', ''):
+                                stream_url = fmt.get('url')
+                                break
+                if stream_url:
+                    break
+        except Exception:
+            continue
+
+    if not stream_url:
+        return jsonify({'error': 'Não foi possível obter um link de stream válido pelas instâncias do Invidious.'}), 502
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            if tipo == 'audio':
-                filename = os.path.splitext(filename)[0] + '.mp3'
-            
-            basename = os.path.basename(filename)
-            return jsonify({
-                'download_link': f"/download-file/{basename}",
-                'filename': basename
-            })
+        ext = 'mp3' if tipo == 'audio' else 'mp4'
+        filename = f"{video_id}.{ext}"
+        file_path = os.path.join(DOWNLOAD_FOLDER, filename)
+
+        # Descarrega o fluxo de mídia utilizando requests de forma totalmente isolada
+        r = requests.get(stream_url, stream=True, timeout=45)
+        if r.status_code == 200:
+            with open(file_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=16384):
+                    if chunk:
+                        f.write(chunk)
+        else:
+            return jsonify({'error': 'Falha ao descarregar o fluxo de mídia da fonte alternativa.'}), 500
+
+        return jsonify({
+            'download_link': f"/download-file/{filename}",
+            'filename': f"{video_title}.{ext}"
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
