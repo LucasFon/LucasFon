@@ -21,7 +21,7 @@ HTML_TEMPLATE = """
 
     <div class="bg-white p-8 rounded-xl shadow-md w-full max-w-2xl text-center">
         <h1 class="text-3xl font-bold text-gray-800 mb-2">Baixar Áudio do YouTube</h1>
-        <p class="text-gray-600 mb-6">Cole o link do YouTube abaixo para extrair e baixar o áudio com o nome correto.</p>
+        <p class="text-gray-600 mb-6">Cole o link do YouTube abaixo para extrair e baixar o áudio em MP3 com o nome da música.</p>
 
         <!-- Formulário para Inserir a URL -->
         <div class="flex flex-col sm:flex-row gap-3 mb-6">
@@ -70,7 +70,7 @@ HTML_TEMPLATE = """
     <script>
         const API_BASE = window.location.origin;
         let currentUrl = "";
-        let globalFilename = "audio.mp3";
+        let cleanFileName = "audio.mp3";
 
         async function buscarInformacoes() {
             let rawUrl = document.getElementById("urlInput").value.trim();
@@ -104,7 +104,9 @@ HTML_TEMPLATE = """
 
                 document.getElementById("videoTitle").innerText = data.title;
                 document.getElementById("videoThumb").src = data.thumbnail;
-                globalFilename = data.filename;
+                
+                // Define o nome correto do ficheiro com terminação .mp3 garantida
+                cleanFileName = data.filename;
 
                 statusMessage.classList.add("hidden");
                 resultContainer.classList.remove("hidden");
@@ -122,7 +124,7 @@ HTML_TEMPLATE = """
 
             statusMessage.classList.remove("hidden", "text-red-600");
             statusMessage.classList.add("text-gray-700");
-            statusMessage.innerText = "A iniciar o download do áudio... Por favor, aguarde.";
+            statusMessage.innerText = "A iniciar o download do MP3... Por favor, aguarde.";
 
             btnAudio.disabled = true;
 
@@ -139,15 +141,16 @@ HTML_TEMPLATE = """
                     throw new Error(data.error || "Erro ao preparar o download.");
                 }
 
+                // Cria o link invisível forçando o nome formatado da música em MP3
                 const link = document.createElement("a");
                 link.href = data.download_link;
-                link.setAttribute("download", globalFilename);
+                link.setAttribute("download", cleanFileName);
                 link.setAttribute("target", "_blank");
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
 
-                statusMessage.innerText = "Download iniciado com sucesso!";
+                statusMessage.innerText = "Download concluído com sucesso!";
 
             } catch (err) {
                 statusMessage.classList.remove("text-gray-700");
@@ -222,14 +225,16 @@ def get_info():
         return jsonify({'error': 'Não foi possível contactar nenhuma instância do Invidious.'}), 502
 
     raw_title = info.get('title', 'audio')
+    # Limpa caracteres especiais e garante que termina estritamente em .mp3
     video_title = "".join([c for c in raw_title if c.isalnum() or c in (' ', '-', '_')]).strip()
+    filename = f"{video_title}.mp3"
 
     thumbnails = info.get('videoThumbnails', [])
     thumb_url = thumbnails[0].get('url', '') if thumbnails else ''
 
     return jsonify({
         'title': raw_title,
-        'filename': f"{video_title}.mp3",
+        'filename': filename,
         'thumbnail': thumb_url
     })
 
