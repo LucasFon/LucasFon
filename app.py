@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, send_file, render_template_string
 
 app = Flask(__name__)
 
@@ -66,7 +66,7 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
-    <!-- Script de Integração com Download Direto via Blob -->
+    <!-- Script de Integração -->
     <script>
         const API_BASE = window.location.origin;
         let currentUrl = "";
@@ -120,7 +120,7 @@ HTML_TEMPLATE = """
 
             statusMessage.classList.remove("hidden", "text-red-600");
             statusMessage.classList.add("text-gray-700");
-            statusMessage.innerText = "A descarregar o áudio diretamente... Por favor, aguarde.";
+            statusMessage.innerText = "A processar e a preparar o áudio... Por favor, aguarde.";
 
             btnAudio.disabled = true;
 
@@ -134,22 +134,17 @@ HTML_TEMPLATE = """
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.error || "Erro ao obter o link de áudio.");
+                    throw new Error(data.error || "Erro ao preparar o download.");
                 }
 
-                // Descarrega o ficheiro diretamente em segundo plano usando Blob
-                statusMessage.innerText = "A preparar o ficheiro para gravação...";
-                const streamResponse = await fetch(data.download_link);
-                const blob = await streamResponse.blob();
-                
-                const blobUrl = window.URL.createObjectURL(blob);
+                // Dispara o download diretamente na mesma página usando o link gerado pelo servidor
+                const downloadUrl = data.download_link + "?t=" + new Date().getTime();
                 const link = document.createElement("a");
-                link.href = blobUrl;
-                link.download = data.filename;
+                link.href = downloadUrl;
+                link.setAttribute("download", data.filename);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                window.URL.revokeObjectURL(blobUrl);
 
                 statusMessage.innerText = "Download concluído com sucesso!";
 
@@ -267,10 +262,33 @@ def download_file():
     if not audio_url:
         return jsonify({'error': 'Não foi possível obter o stream de áudio pelas instâncias ativas.'}), 502
 
-    return jsonify({
-        'download_link': audio_url,
-        'filename': f"{video_title}.mp3"
-    })
+    try:
+        # Servidor descarrega o áudio e guarda localmente para evitar erros de CORS no browser
+        filename = f"{video_id}.mp3"
+        file_path = os.path.join(DOWNLOAD_FOLDER, filename)
+
+        r = requests.get(audio_url, stream=True, timeout=30)
+        if r.status_code == 200:
+            with open(file_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+        else:
+            return jsonify({'error': 'Falha ao descarregar o fluxo de áudio.'}), 500
+
+        return jsonify({
+            'download_link': f"/download-file/{filename}",
+            'filename': f"{video_title}.mp3"
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/download-file/<filename>')
+def serve_file(filename):
+    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
+    if os.path.exists(file_path):
+        return send_file(file_path, as_attachment=True)
+    return jsonify({'error': 'Ficheiro não encontrado'}), 404
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
