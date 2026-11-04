@@ -1,15 +1,15 @@
 import os
+import requests
 from flask import Flask, request, jsonify, send_file, render_template_string
 import yt_dlp
 
 app = Flask(__name__)
 
-PROXY_URL = os.environ.get('PROXY_URL')
 DOWNLOAD_FOLDER = 'downloads'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
-# Caminho absoluto seguro para o cookies.txt na mesma pasta do app.py
-COOKIE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies.txt')
+# Instância pública padrão do Invidious para consulta de metadados e streams
+INVIDIOUS_INSTANCE = "https://inv.nadeko.net"
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -17,7 +17,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Baixar Vídeo e Áudio do YouTube</title>
+    <title>Baixar Vídeo e Áudio do YouTube (Invidious)</title>
     <!-- Tailwind CSS para estilização -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -180,6 +180,14 @@ HTML_TEMPLATE = """
 </html>
 """
 
+def extract_video_id(url):
+    """Extrai o ID do vídeo de diferentes formatos de URL do YouTube"""
+    if 'v=' in url:
+        return url.split('v=')[1].split('&')[0]
+    elif 'youtu.be/' in url:
+        return url.split('youtu.be/')[1].split('?')[0]
+    return url
+
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE)
@@ -192,29 +200,19 @@ def get_info():
     if not url:
         return jsonify({'error': 'URL não fornecido'}), 400
 
-    ydl_opts = {
-        'format': 'best',
-        'quiet': True,
-        'no_warnings': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-    }
-
-    if PROXY_URL:
-        ydl_opts['proxy'] = PROXY_URL
-
-    if os.path.exists(COOKIE_PATH):
-        ydl_opts['cookiefile'] = COOKIE_PATH
+    video_id = extract_video_id(url)
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            return jsonify({
-                'title': info.get('title', 'Vídeo sem título'),
-                'thumbnail': info.get('thumbnail', '')
-            })
+        # Consulta a API pública do Invidious em vez de chamar diretamente o YouTube
+        response = requests.get(f"{INVIDIOUS_INSTANCE}/api/v1/videos/{video_id}", timeout=10)
+        if response.status_code != 200:
+            return jsonify({'error': 'Vídeo não encontrado ou instância indisponível'}), 404
+
+        info = response.json()
+        return jsonify({
+            'title': info.get('title', 'Vídeo sem título'),
+            'thumbnail': info.get('videoThumbnails', [{}])[0].get('url', '')
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -227,12 +225,11 @@ def download_file():
     if not url:
         return jsonify({'error': 'URL não fornecido'}), 400
 
+    # Fallback seguro com yt-dlp usando o link direto do Invidious ou processamento padrão
     ydl_opts = {
         'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(id)s.%(ext)s'),
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
+        'quiet': True,
+        'no_warnings': True,
     }
 
     if tipo == 'audio':
@@ -244,12 +241,6 @@ def download_file():
         }]
     else:
         ydl_opts['format'] = 'bv*+ba/b'
-
-    if PROXY_URL:
-        ydl_opts['proxy'] = PROXY_URL
-
-    if os.path.exists(COOKIE_PATH):
-        ydl_opts['cookiefile'] = COOKIE_PATH
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
