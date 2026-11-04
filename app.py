@@ -13,15 +13,15 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Baixar Vídeo e Áudio do YouTube</title>
+    <title>Baixar Áudio do YouTube (MP3)</title>
     <!-- Tailwind CSS para estilização -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
 
     <div class="bg-white p-8 rounded-xl shadow-md w-full max-w-2xl text-center">
-        <h1 class="text-3xl font-bold text-gray-800 mb-2">Baixar Vídeo e Áudio do YouTube</h1>
-        <p class="text-gray-600 mb-6">Cole o link do YouTube abaixo para baixar em MP3 ou MP4 com áudio perfeito.</p>
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">Baixar Áudio do YouTube</h1>
+        <p class="text-gray-600 mb-6">Cole o link do YouTube abaixo para extrair e baixar o áudio em MP3 com alta qualidade.</p>
 
         <!-- Formulário para Inserir a URL -->
         <div class="flex flex-col sm:flex-row gap-3 mb-6">
@@ -43,7 +43,7 @@ HTML_TEMPLATE = """
         <!-- Mensagens de Estado -->
         <div id="statusMessage" class="hidden my-4 text-center text-gray-700 font-medium"></div>
 
-        <!-- Resultados (Título, Thumbnail e Botões) -->
+        <!-- Resultados (Título, Thumbnail e Botão de Download) -->
         <div id="resultContainer" class="hidden border-t pt-6 text-left">
             <div class="flex flex-col md:flex-row gap-4 items-center mb-6">
                 <img id="videoThumb" class="w-full md:w-48 rounded-lg shadow" src="" alt="Thumbnail do Vídeo">
@@ -52,19 +52,10 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
-            <!-- Botões de Download -->
+            <!-- Botão de Download de Áudio -->
             <div class="flex flex-col gap-3">
                 <button 
-                    onclick="fazerDownload('video')" 
-                    id="btnDownloadVideo"
-                    class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg flex justify-between items-center transition duration-200"
-                >
-                    <span>Baixar Vídeo (MP4 com Áudio)</span>
-                    <span class="bg-green-800 text-xs px-2 py-1 rounded">HD</span>
-                </button>
-
-                <button 
-                    onclick="fazerDownload('audio')" 
+                    onclick="fazerDownload()" 
                     id="btnDownloadAudio"
                     class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex justify-between items-center transition duration-200"
                 >
@@ -123,32 +114,27 @@ HTML_TEMPLATE = """
             }
         }
 
-        async function fazerDownload(tipo) {
+        async function fazerDownload() {
             const statusMessage = document.getElementById("statusMessage");
-            const btnVideo = document.getElementById("btnDownloadVideo");
             const btnAudio = document.getElementById("btnDownloadAudio");
 
             statusMessage.classList.remove("hidden", "text-red-600");
             statusMessage.classList.add("text-gray-700");
-            statusMessage.innerText = `A preparar o download seguro de ${tipo === 'audio' ? 'áudio (MP3)' : 'vídeo com áudio (MP4)'}... Aguarde.`;
+            statusMessage.innerText = "A preparar o link de download do áudio... Aguarde.";
 
-            btnVideo.disabled = true;
             btnAudio.disabled = true;
 
             try {
                 const response = await fetch(`${API_BASE}/api/download`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ 
-                        url: currentUrl, 
-                        type: tipo 
-                    })
+                    body: JSON.stringify({ url: currentUrl })
                 });
 
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.error || "Erro ao descarregar o ficheiro.");
+                    throw new Error(data.error || "Erro ao descarregar o áudio.");
                 }
 
                 const link = document.createElement("a");
@@ -159,14 +145,13 @@ HTML_TEMPLATE = """
                 link.click();
                 document.body.removeChild(link);
 
-                statusMessage.innerText = "Download iniciado com sucesso!";
+                statusMessage.innerText = "Download do MP3 iniciado com sucesso!";
 
             } catch (err) {
                 statusMessage.classList.remove("text-gray-700");
                 statusMessage.classList.add("text-red-600");
                 statusMessage.innerText = "Erro ao baixar: " + err.message;
             } finally {
-                btnVideo.disabled = false;
                 btnAudio.disabled = false;
             }
         }
@@ -246,7 +231,6 @@ def get_info():
 def download_file():
     data = request.get_json()
     url = data.get('url')
-    tipo = data.get('type', 'video')
     
     if not url:
         return jsonify({'error': 'URL não fornecido'}), 400
@@ -254,47 +238,33 @@ def download_file():
     video_id = extract_video_id(url)
     instances = get_invidious_instances()
 
-    stream_url = None
-    video_title = "video"
+    audio_url = None
+    video_title = "audio"
 
     for instance in instances[:8]:
         try:
             response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=5)
             if response.status_code == 200:
                 vid_data = response.json()
-                video_title = vid_data.get('title', 'video').replace('/', '_').replace('\\', '_')
+                video_title = vid_data.get('title', 'audio').replace('/', '_').replace('\\', '_')
                 
-                if tipo == 'audio':
-                    # Procura stream de áudio dedicado de alta qualidade
-                    adaptive = vid_data.get('adaptiveFormats', [])
-                    for fmt in adaptive:
-                        if 'audio' in fmt.get('type', ''):
-                            stream_url = fmt.get('url')
-                            break
-                else:
-                    # Procura primeiro streams combinados (que já incluem vídeo e áudio juntos)
-                    formatos = vid_data.get('formatStreams', [])
-                    if formatos:
-                        stream_url = formatos[-1].get('url')
-                    else:
-                        # Se não houver combinado, pega o melhor vídeo disponível
-                        adaptive = vid_data.get('adaptiveFormats', [])
-                        for fmt in adaptive:
-                            if 'video/mp4' in fmt.get('type', ''):
-                                stream_url = fmt.get('url')
-                                break
-                if stream_url:
+                # Procura especificamente pelo stream de áudio de alta qualidade
+                adaptive = vid_data.get('adaptiveFormats', [])
+                for fmt in adaptive:
+                    if 'audio' in fmt.get('type', ''):
+                        audio_url = fmt.get('url')
+                        break
+                if audio_url:
                     break
         except Exception:
             continue
 
-    if not stream_url:
-        return jsonify({'error': 'Não foi possível obter um link de stream válido pelas instâncias do Invidious.'}), 502
+    if not audio_url:
+        return jsonify({'error': 'Não foi possível obter o stream de áudio pelas instâncias ativas.'}), 502
 
-    ext = 'mp3' if tipo == 'audio' else 'mp4'
     return jsonify({
-        'download_link': stream_url,
-        'filename': f"{video_title}.{ext}"
+        'download_link': audio_url,
+        'filename': f"{video_title}.mp3"
     })
 
 if __name__ == '__main__':
