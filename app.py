@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, request, jsonify, send_file, render_template_string
+from flask import Flask, request, jsonify, render_template_string
 
 app = Flask(__name__)
 
@@ -70,6 +70,7 @@ HTML_TEMPLATE = """
     <script>
         const API_BASE = window.location.origin;
         let currentUrl = "";
+        let globalFilename = "audio.mp3";
 
         async function buscarInformacoes() {
             let rawUrl = document.getElementById("urlInput").value.trim();
@@ -103,6 +104,7 @@ HTML_TEMPLATE = """
 
                 document.getElementById("videoTitle").innerText = data.title;
                 document.getElementById("videoThumb").src = data.thumbnail;
+                globalFilename = data.filename;
 
                 statusMessage.classList.add("hidden");
                 resultContainer.classList.remove("hidden");
@@ -120,7 +122,7 @@ HTML_TEMPLATE = """
 
             statusMessage.classList.remove("hidden", "text-red-600");
             statusMessage.classList.add("text-gray-700");
-            statusMessage.innerText = "A preparar o áudio com o nome correto... Por favor, aguarde.";
+            statusMessage.innerText = "A iniciar o download do áudio... Por favor, aguarde.";
 
             btnAudio.disabled = true;
 
@@ -137,15 +139,15 @@ HTML_TEMPLATE = """
                     throw new Error(data.error || "Erro ao preparar o download.");
                 }
 
-                const downloadUrl = data.download_link + "?t=" + new Date().getTime();
                 const link = document.createElement("a");
-                link.href = downloadUrl;
-                link.setAttribute("download", data.filename);
+                link.href = data.download_link;
+                link.setAttribute("download", globalFilename);
+                link.setAttribute("target", "_blank");
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
 
-                statusMessage.innerText = "Download concluído com sucesso!";
+                statusMessage.innerText = "Download iniciado com sucesso!";
 
             } catch (err) {
                 statusMessage.classList.remove("text-gray-700");
@@ -219,11 +221,15 @@ def get_info():
     if not info:
         return jsonify({'error': 'Não foi possível contactar nenhuma instância do Invidious.'}), 502
 
+    raw_title = info.get('title', 'audio')
+    video_title = "".join([c for c in raw_title if c.isalnum() or c in (' ', '-', '_')]).strip()
+
     thumbnails = info.get('videoThumbnails', [])
     thumb_url = thumbnails[0].get('url', '') if thumbnails else ''
 
     return jsonify({
-        'title': info.get('title', 'Vídeo sem título'),
+        'title': raw_title,
+        'filename': f"{video_title}.mp3",
         'thumbnail': thumb_url
     })
 
@@ -239,7 +245,6 @@ def download_file():
     instances = get_invidious_instances()
 
     audio_stream_url = None
-    video_title = "audio"
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -250,10 +255,6 @@ def download_file():
             response = requests.get(f"{instance}/api/v1/videos/{video_id}", headers=headers, timeout=5)
             if response.status_code == 200:
                 vid_data = response.json()
-                raw_title = vid_data.get('title', 'audio')
-                # Limpa caracteres especiais proibidos em nomes de ficheiros
-                video_title = "".join([c for c in raw_title if c.isalnum() or c in (' ', '-', '_')]).strip()
-                
                 adaptive = vid_data.get('adaptiveFormats', [])
                 for fmt in adaptive:
                     if 'audio' in fmt.get('type', ''):
@@ -267,33 +268,9 @@ def download_file():
     if not audio_stream_url:
         return jsonify({'error': 'Não foi possível obter o link de áudio pelas instâncias ativas.'}), 502
 
-    try:
-        # Descarrega o stream para a pasta downloads do servidor com o ID do vídeo
-        file_path = os.path.join(DOWNLOAD_FOLDER, f"{video_id}.mp3")
-        r = requests.get(audio_stream_url, headers=headers, stream=True, timeout=45)
-        
-        if r.status_code == 200:
-            with open(file_path, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=16384):
-                    if chunk:
-                        f.write(chunk)
-        else:
-            return jsonify({'error': 'Falha ao descarregar o fluxo de áudio.'}), 500
-
-        # Retorna o link interno do servidor que força o nome real do vídeo
-        return jsonify({
-            'download_link': f"/download-file/{video_id}.mp3",
-            'filename': f"{video_title}.mp3"
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/download-file/<filename>')
-def serve_file(filename):
-    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
-    if os.path.exists(file_path):
-        return send_file(file_path, as_attachment=True)
-    return jsonify({'error': 'Ficheiro não encontrado'}), 404
+    return jsonify({
+        'download_link': audio_stream_url
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
