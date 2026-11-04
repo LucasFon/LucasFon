@@ -1,6 +1,7 @@
 import os
 import requests
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, send_file, render_template_string
+import yt_dlp
 
 app = Flask(__name__)
 
@@ -21,7 +22,7 @@ HTML_TEMPLATE = """
 
     <div class="bg-white p-8 rounded-xl shadow-md w-full max-w-2xl text-center">
         <h1 class="text-3xl font-bold text-gray-800 mb-2">Baixar Vídeo e Áudio do YouTube</h1>
-        <p class="text-gray-600 mb-6">Cole o link do YouTube abaixo para converter e baixar em MP3 ou MP4.</p>
+        <p class="text-gray-600 mb-6">Cole o link do YouTube abaixo para converter e baixar em MP3 ou MP4 com áudio perfeito.</p>
 
         <!-- Formulário para Inserir a URL -->
         <div class="flex flex-col sm:flex-row gap-3 mb-6">
@@ -59,8 +60,8 @@ HTML_TEMPLATE = """
                     id="btnDownloadVideo"
                     class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg flex justify-between items-center transition duration-200"
                 >
-                    <span>Baixar Vídeo (MP4)</span>
-                    <span class="bg-green-800 text-xs px-2 py-1 rounded">HD / SD</span>
+                    <span>Baixar Vídeo (MP4 com Áudio)</span>
+                    <span class="bg-green-800 text-xs px-2 py-1 rounded">HD</span>
                 </button>
 
                 <button 
@@ -69,7 +70,7 @@ HTML_TEMPLATE = """
                     class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex justify-between items-center transition duration-200"
                 >
                     <span>Baixar Áudio (MP3)</span>
-                    <span class="bg-blue-800 text-xs px-2 py-1 rounded">Alta Qualidade</span>
+                    <span class="bg-blue-800 text-xs px-2 py-1 rounded">192 kbps</span>
                 </button>
             </div>
         </div>
@@ -130,7 +131,7 @@ HTML_TEMPLATE = """
 
             statusMessage.classList.remove("hidden", "text-red-600");
             statusMessage.classList.add("text-gray-700");
-            statusMessage.innerText = `A preparar o link de download para ${tipo === 'audio' ? 'áudio' : 'vídeo'}... Aguarde.`;
+            statusMessage.innerText = `A descarregar e a converter ${tipo === 'audio' ? 'para MP3' : 'vídeo com áudio (MP4)'}... Aguarde.`;
 
             btnVideo.disabled = true;
             btnAudio.disabled = true;
@@ -151,16 +152,16 @@ HTML_TEMPLATE = """
                     throw new Error(data.error || "Erro ao descarregar o ficheiro.");
                 }
 
-                // Abre diretamente o link do stream obtido de forma segura
+                const downloadLinkComCacheBuster = data.download_link + "?t=" + new Date().getTime();
+
                 const link = document.createElement("a");
-                link.href = data.download_link;
+                link.href = downloadLinkComCacheBuster;
                 link.setAttribute("download", data.filename);
-                link.setAttribute("target", "_blank");
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
 
-                statusMessage.innerText = "Download iniciado com sucesso!";
+                statusMessage.innerText = "Download concluído com sucesso!";
 
             } catch (err) {
                 statusMessage.classList.remove("text-gray-700");
@@ -185,7 +186,7 @@ def extract_video_id(url):
     return url
 
 def get_invidious_instances():
-    """Obtém dinamicamente instâncias ativas do Invidious"""
+    """Obtém instâncias ativas do Invidious"""
     instances = []
     try:
         res = requests.get("https://api.invidious.io/instances.json?sort_by=type,health", timeout=4)
@@ -252,47 +253,46 @@ def download_file():
     if not url:
         return jsonify({'error': 'URL não fornecido'}), 400
 
-    video_id = extract_video_id(url)
-    instances = get_invidious_instances()
+    # Configuração inteligente do yt-dlp para garantir que vídeo e áudio vêm unidos corretamente
+    ydl_opts = {
+        'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(id)s.%(ext)s'),
+        'quiet': True,
+        'no_warnings': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+    }
 
-    stream_url = None
-    video_title = "video"
+    if tipo == 'audio':
+        ydl_opts['format'] = 'ba'
+        ydl_opts['postprocessors'] = [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }]
+    else:
+        # Garante que descarrega o melhor formato combinado (vídeo + áudio juntos) em MP4
+        ydl_opts['format'] = 'best[ext=mp4]/best'
 
-    for instance in instances[:8]:
-        try:
-            response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=5)
-            if response.status_code == 200:
-                vid_data = response.json()
-                video_title = vid_data.get('title', 'video').replace('/', '_').replace('\\', '_')
-                
-                if tipo == 'audio':
-                    for fmt in vid_data.get('adaptiveFormats', []):
-                        if 'audio' in fmt.get('type', ''):
-                            stream_url = fmt.get('url')
-                            break
-                else:
-                    formatos = vid_data.get('formatStreams', [])
-                    if formatos:
-                        stream_url = formatos[-1].get('url')
-                    else:
-                        adaptive = vid_data.get('adaptiveFormats', [])
-                        for fmt in adaptive:
-                            if 'video' in fmt.get('type', ''):
-                                stream_url = fmt.get('url')
-                                break
-                if stream_url:
-                    break
-        except Exception:
-            continue
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            if tipo == 'audio':
+                filename = os.path.splitext(filename)[0] + '.mp3'
+            
+            basename = os.path.basename(filename)
+            return jsonify({
+                'download_link': f"/download-file/{basename}",
+                'filename': basename
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-    if not stream_url:
-        return jsonify({'error': 'Não foi possível obter um link de stream válido pelas instâncias do Invidious.'}), 502
-
-    ext = 'mp3' if tipo == 'audio' else 'mp4'
-    return jsonify({
-        'download_link': stream_url,
-        'filename': f"{video_title}.{ext}"
-    })
+@app.route('/download-file/<filename>')
+def serve_file(filename):
+    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
+    if os.path.exists(file_path):
+        return send_file(file_path, as_attachment=True)
+    return jsonify({'error': 'Ficheiro não encontrado'}), 404
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
