@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, request, jsonify, send_file, render_template_string
+from flask import Flask, request, jsonify, render_template_string, redirect
 
 app = Flask(__name__)
 
@@ -120,7 +120,7 @@ HTML_TEMPLATE = """
 
             statusMessage.classList.remove("hidden", "text-red-600");
             statusMessage.classList.add("text-gray-700");
-            statusMessage.innerText = "A descarregar o áudio de forma segura... Por favor, aguarde.";
+            statusMessage.innerText = "A iniciar o download do áudio... Por favor, aguarde.";
 
             btnAudio.disabled = true;
 
@@ -137,15 +137,15 @@ HTML_TEMPLATE = """
                     throw new Error(data.error || "Erro ao preparar o download.");
                 }
 
-                const downloadUrl = data.download_link + "?t=" + new Date().getTime();
                 const link = document.createElement("a");
-                link.href = downloadUrl;
+                link.href = data.download_link;
                 link.setAttribute("download", data.filename);
+                link.setAttribute("target", "_blank");
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
 
-                statusMessage.innerText = "Download concluído com sucesso!";
+                statusMessage.innerText = "Download iniciado com sucesso!";
 
             } catch (err) {
                 statusMessage.classList.remove("text-gray-700");
@@ -238,16 +238,14 @@ def download_file():
     video_id = extract_video_id(url)
     instances = get_invidious_instances()
 
-    audio_url = None
+    audio_stream_url = None
     video_title = "audio"
 
-    # Cabeçalhos para simular um browser real e evitar bloqueios na requisição do stream
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.5'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
 
+    # Procura uma instância que forneça o link de stream de áudio válido diretamente
     for instance in instances[:10]:
         try:
             response = requests.get(f"{instance}/api/v1/videos/{video_id}", headers=headers, timeout=5)
@@ -258,43 +256,21 @@ def download_file():
                 adaptive = vid_data.get('adaptiveFormats', [])
                 for fmt in adaptive:
                     if 'audio' in fmt.get('type', ''):
-                        audio_url = fmt.get('url')
+                        audio_stream_url = fmt.get('url')
                         break
-                if audio_url:
+                if audio_stream_url:
                     break
         except Exception:
             continue
 
-    if not audio_url:
-        return jsonify({'error': 'Não foi possível obter o stream de áudio pelas instâncias ativas.'}), 502
+    if not audio_stream_url:
+        return jsonify({'error': 'Não foi possível obter o link de áudio pelas instâncias ativas.'}), 502
 
-    try:
-        filename = f"{video_id}.mp3"
-        file_path = os.path.join(DOWNLOAD_FOLDER, filename)
-
-        # Descarrega o áudio enviando os cabeçalhos para o servidor de origem
-        r = requests.get(audio_url, headers=headers, stream=True, timeout=45)
-        if r.status_code == 200:
-            with open(file_path, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=16384):
-                    if chunk:
-                        f.write(chunk)
-        else:
-            return jsonify({'error': 'Falha ao descarregar o fluxo de áudio.'}), 500
-
-        return jsonify({
-            'download_link': f"/download-file/{filename}",
-            'filename': f"{video_title}.mp3"
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/download-file/<filename>')
-def serve_file(filename):
-    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
-    if os.path.exists(file_path):
-        return send_file(file_path, as_attachment=True)
-    return jsonify({'error': 'Ficheiro não encontrado'}), 404
+    # Retorna diretamente o link de stream para o navegador do utilizador descarregar sem passar pelo Render
+    return jsonify({
+        'download_link': audio_stream_url,
+        'filename': f"{video_title}.mp3"
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
