@@ -8,8 +8,13 @@ app = Flask(__name__)
 DOWNLOAD_FOLDER = 'downloads'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
-# Instância pública padrão do Invidious para consulta de metadados e streams
-INVIDIOUS_INSTANCE = "https://inv.nadeko.net"
+# Lista de instâncias públicas do Invidious para teste automático (fallback)
+INVIDIOUS_INSTANCES = [
+    "https://inv.nadeko.net",
+    "https://invidious.privacyredirect.com",
+    "https://yt.artemislena.eu",
+    "https://invidious.perennialte.ch"
+]
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -17,7 +22,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Baixar Vídeo e Áudio do YouTube (Invidious)</title>
+    <title>Baixar Vídeo e Áudio do YouTube</title>
     <!-- Tailwind CSS para estilização -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -202,19 +207,27 @@ def get_info():
 
     video_id = extract_video_id(url)
 
-    try:
-        # Consulta a API pública do Invidious em vez de chamar diretamente o YouTube
-        response = requests.get(f"{INVIDIOUS_INSTANCE}/api/v1/videos/{video_id}", timeout=10)
-        if response.status_code != 200:
-            return jsonify({'error': 'Vídeo não encontrado ou instância indisponível'}), 404
+    # Tenta percorrer várias instâncias do Invidious até encontrar uma que responda
+    info = None
+    for instance in INVIDIOUS_INSTANCES:
+        try:
+            response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=5)
+            if response.status_code == 200:
+                info = response.json()
+                break
+        except Exception:
+            continue
 
-        info = response.json()
-        return jsonify({
-            'title': info.get('title', 'Vídeo sem título'),
-            'thumbnail': info.get('videoThumbnails', [{}])[0].get('url', '')
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    if not info:
+        return jsonify({'error': 'Todas as instâncias do Invidious falharam ou estão indisponíveis.'}), 502
+
+    thumbnails = info.get('videoThumbnails', [])
+    thumb_url = thumbnails[0].get('url', '') if thumbnails else ''
+
+    return jsonify({
+        'title': info.get('title', 'Vídeo sem título'),
+        'thumbnail': thumb_url
+    })
 
 @app.route('/api/download', methods=['POST'])
 def download_file():
@@ -225,7 +238,6 @@ def download_file():
     if not url:
         return jsonify({'error': 'URL não fornecido'}), 400
 
-    # Fallback seguro com yt-dlp usando o link direto do Invidious ou processamento padrão
     ydl_opts = {
         'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(id)s.%(ext)s'),
         'quiet': True,
