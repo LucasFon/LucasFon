@@ -1,7 +1,6 @@
 import os
 import requests
 from flask import Flask, request, jsonify, send_file, render_template_string
-import yt_dlp
 
 app = Flask(__name__)
 
@@ -121,7 +120,7 @@ HTML_TEMPLATE = """
 
             statusMessage.classList.remove("hidden", "text-red-600");
             statusMessage.classList.add("text-gray-700");
-            statusMessage.innerText = "A descarregar e a converter para MP3... Por favor, aguarde.";
+            statusMessage.innerText = "A descarregar o áudio de forma segura... Por favor, aguarde.";
 
             btnAudio.disabled = true;
 
@@ -162,7 +161,7 @@ HTML_TEMPLATE = """
 """
 
 def extract_video_id(url):
-    """Extrai o ID do vídeo de forma segura, ignorando playlists"""
+    """Extrai o ID do vídeo de forma segura, ignorando parâmetros como playlists"""
     if 'v=' in url:
         return url.split('v=')[1].split('&')[0]
     elif 'youtu.be/' in url:
@@ -236,33 +235,51 @@ def download_file():
     if not url:
         return jsonify({'error': 'URL não fornecido'}), 400
 
-    # Configuração do yt-dlp com o client android/web para extração segura de áudio
-    ydl_opts = {
-        'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(id)s.%(ext)s'),
-        'quiet': True,
-        'no_warnings': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-        'format': 'ba',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }]
-    }
+    video_id = extract_video_id(url)
+    instances = get_invidious_instances()
+
+    audio_url = None
+    video_title = "audio"
+
+    # Percorre instâncias ativas do Invidious para encontrar o stream de áudio
+    for instance in instances[:10]:
+        try:
+            response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=5)
+            if response.status_code == 200:
+                vid_data = response.json()
+                video_title = vid_data.get('title', 'audio').replace('/', '_').replace('\\', '_')
+                
+                adaptive = vid_data.get('adaptiveFormats', [])
+                for fmt in adaptive:
+                    if 'audio' in fmt.get('type', ''):
+                        audio_url = fmt.get('url')
+                        break
+                if audio_url:
+                    break
+        except Exception:
+            continue
+
+    if not audio_url:
+        return jsonify({'error': 'Não foi possível obter o stream de áudio pelas instâncias ativas.'}), 502
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            filename = os.path.splitext(filename)[0] + '.mp3'
-            
-            basename = os.path.basename(filename)
-            video_title = info.get('title', 'audio').replace('/', '_').replace('\\', '_')
-            
-            return jsonify({
-                'download_link': f"/download-file/{basename}",
-                'filename': f"{video_title}.mp3"
-            })
+        filename = f"{video_id}.mp3"
+        file_path = os.path.join(DOWNLOAD_FOLDER, filename)
+
+        # Descarrega o áudio através do stream limpo do Invidious
+        r = requests.get(audio_url, stream=True, timeout=40)
+        if r.status_code == 200:
+            with open(file_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=16384):
+                    if chunk:
+                        f.write(chunk)
+        else:
+            return jsonify({'error': 'Falha ao descarregar o fluxo de áudio.'}), 500
+
+        return jsonify({
+            'download_link': f"/download-file/{filename}",
+            'filename': f"{video_title}.mp3"
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
