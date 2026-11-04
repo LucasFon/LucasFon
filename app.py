@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, request, jsonify, send_file, render_template_string
+from flask import Flask, request, jsonify, render_template_string
 
 app = Flask(__name__)
 
@@ -69,7 +69,7 @@ HTML_TEMPLATE = """
                     class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex justify-between items-center transition duration-200"
                 >
                     <span>Baixar Áudio (MP3)</span>
-                    <span class="bg-blue-800 text-xs px-2 py-1 rounded">192 kbps</span>
+                    <span class="bg-blue-800 text-xs px-2 py-1 rounded">Alta Qualidade</span>
                 </button>
             </div>
         </div>
@@ -130,7 +130,7 @@ HTML_TEMPLATE = """
 
             statusMessage.classList.remove("hidden", "text-red-600");
             statusMessage.classList.add("text-gray-700");
-            statusMessage.innerText = `A descarregar e a converter ${tipo === 'audio' ? 'áudio (MP3)' : 'vídeo (MP4)'}... Aguarde.`;
+            statusMessage.innerText = `A preparar o link de download para ${tipo === 'audio' ? 'áudio' : 'vídeo'}... Aguarde.`;
 
             btnVideo.disabled = true;
             btnAudio.disabled = true;
@@ -151,16 +151,16 @@ HTML_TEMPLATE = """
                     throw new Error(data.error || "Erro ao descarregar o ficheiro.");
                 }
 
-                const downloadLinkComCacheBuster = data.download_link + "?t=" + new Date().getTime();
-
+                // Abre diretamente o link do stream obtido de forma segura
                 const link = document.createElement("a");
-                link.href = downloadLinkComCacheBuster;
+                link.href = data.download_link;
                 link.setAttribute("download", data.filename);
+                link.setAttribute("target", "_blank");
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
 
-                statusMessage.innerText = "Download concluído com sucesso!";
+                statusMessage.innerText = "Download iniciado com sucesso!";
 
             } catch (err) {
                 statusMessage.classList.remove("text-gray-700");
@@ -177,7 +177,7 @@ HTML_TEMPLATE = """
 """
 
 def extract_video_id(url):
-    """Extrai o ID do vídeo de forma segura, ignorando parâmetros extras como playlists"""
+    """Extrai o ID do vídeo de forma segura"""
     if 'v=' in url:
         return url.split('v=')[1].split('&')[0]
     elif 'youtu.be/' in url:
@@ -258,7 +258,6 @@ def download_file():
     stream_url = None
     video_title = "video"
 
-    # Percorre as instâncias ativas para encontrar uma que forneça streams de áudio/vídeo válidos
     for instance in instances[:8]:
         try:
             response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=5)
@@ -267,13 +266,11 @@ def download_file():
                 video_title = vid_data.get('title', 'video').replace('/', '_').replace('\\', '_')
                 
                 if tipo == 'audio':
-                    # Procura streams de áudio nos formatos adaptativos
                     for fmt in vid_data.get('adaptiveFormats', []):
                         if 'audio' in fmt.get('type', ''):
                             stream_url = fmt.get('url')
                             break
                 else:
-                    # Procura streams de vídeo combinados ou adaptativos com alta qualidade
                     formatos = vid_data.get('formatStreams', [])
                     if formatos:
                         stream_url = formatos[-1].get('url')
@@ -291,34 +288,11 @@ def download_file():
     if not stream_url:
         return jsonify({'error': 'Não foi possível obter um link de stream válido pelas instâncias do Invidious.'}), 502
 
-    try:
-        ext = 'mp3' if tipo == 'audio' else 'mp4'
-        filename = f"{video_id}.{ext}"
-        file_path = os.path.join(DOWNLOAD_FOLDER, filename)
-
-        # Descarrega o fluxo de mídia utilizando requests de forma totalmente isolada
-        r = requests.get(stream_url, stream=True, timeout=45)
-        if r.status_code == 200:
-            with open(file_path, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=16384):
-                    if chunk:
-                        f.write(chunk)
-        else:
-            return jsonify({'error': 'Falha ao descarregar o fluxo de mídia da fonte alternativa.'}), 500
-
-        return jsonify({
-            'download_link': f"/download-file/{filename}",
-            'filename': f"{video_title}.{ext}"
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/download-file/<filename>')
-def serve_file(filename):
-    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
-    if os.path.exists(file_path):
-        return send_file(file_path, as_attachment=True)
-    return jsonify({'error': 'Ficheiro não encontrado'}), 404
+    ext = 'mp3' if tipo == 'audio' else 'mp4'
+    return jsonify({
+        'download_link': stream_url,
+        'filename': f"{video_title}.{ext}"
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
