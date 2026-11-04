@@ -178,12 +178,35 @@ HTML_TEMPLATE = """
 """
 
 def extract_video_id(url):
-    """Extrai o ID do vídeo de forma segura, ignorando parâmetros extras como playlists"""
+    """Extrai o ID do vídeo de forma segura"""
     if 'v=' in url:
         return url.split('v=')[1].split('&')[0]
     elif 'youtu.be/' in url:
         return url.split('youtu.be/')[1].split('?')[0]
     return url
+
+def get_invidious_instances():
+    """Obtém dinamicamente instâncias ativas do Invidious"""
+    instances = []
+    try:
+        res = requests.get("https://api.invidious.io/instances.json?sort_by=type,health", timeout=4)
+        if res.status_code == 200:
+            for item in res.json():
+                domain = item[0]
+                details = item[1]
+                if details.get('type') == 'https' and details.get('cors'):
+                    instances.append(f"https://{domain}")
+    except Exception:
+        pass
+
+    if not instances:
+        instances = [
+            "https://invidious.privacyredirect.com",
+            "https://yt.artemislena.eu",
+            "https://invidious.perennialte.ch",
+            "https://inv.nadeko.net"
+        ]
+    return instances
 
 @app.route('/')
 def index():
@@ -198,33 +221,10 @@ def get_info():
         return jsonify({'error': 'URL não fornecido'}), 400
 
     video_id = extract_video_id(url)
-
-    # 1. Obter dinamicamente instâncias ativas do Invidious oficiais
-    instances = []
-    try:
-        res = requests.get("https://api.invidious.io/instances.json?sort_by=type,health", timeout=5)
-        if res.status_code == 200:
-            # Pega as primeiras instâncias HTTPS da lista
-            data_instances = res.json()
-            for item in data_instances:
-                domain = item[0]
-                details = item[1]
-                if details.get('type') == 'https' and details.get('cors'):
-                    instances.append(f"https://{domain}")
-    except Exception:
-        pass
-
-    # Fallback caso a API global falhe
-    if not instances:
-        instances = [
-            "https://invidious.privacyredirect.com",
-            "https://yt.artemislena.eu",
-            "https://invidious.perennialte.ch",
-            "https://inv.nadeko.net"
-        ]
+    instances = get_invidious_instances()
 
     info = None
-    for instance in instances[:5]:  # Testa até 5 instâncias ativas
+    for instance in instances[:5]:
         try:
             response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=4)
             if response.status_code == 200:
@@ -234,7 +234,7 @@ def get_info():
             continue
 
     if not info:
-        return jsonify({'error': 'Não foi possível contactar nenhuma instância do Invidious neste momento.'}), 502
+        return jsonify({'error': 'Não foi possível contactar nenhuma instância do Invidious.'}), 502
 
     thumbnails = info.get('videoThumbnails', [])
     thumb_url = thumbnails[0].get('url', '') if thumbnails else ''
@@ -253,12 +253,46 @@ def download_file():
     if not url:
         return jsonify({'error': 'URL não fornecido'}), 400
 
+    video_id = extract_video_id(url)
+    instances = get_invidious_instances()
+
+    # Tenta obter o link de stream direto através do Invidious para evitar o bloqueio de bot do yt-dlp no Render
+    stream_url = None
+    for instance in instances[:5]:
+        try:
+            response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=4)
+            if response.status_code == 200:
+                vid_data = response.json()
+                # Pega os formatos adaptativos ou o formato padrão de vídeo/áudio
+                adaptive_formats = vid_data.get('adaptiveFormats', [])
+                if tipo == 'audio':
+                    # Procura stream de áudio
+                    for fmt in adaptive_formats:
+                        if 'audio' in fmt.get('type', ''):
+                            stream_url = fmt.get('url')
+                            break
+                else:
+                    # Procura stream de vídeo com formato combinado
+                    formatos = vid_data.get('formatStreams', [])
+                    if formatos:
+                        stream_url = formatos[-1].get('url')
+                if stream_url:
+                    break
+        except Exception:
+            continue
+
+    # Se obtivemos o link direto do stream via Invidious, descarregamos esse link limpo
+    target_url = stream_url if stream_url else url
+
     ydl_opts = {
         'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(id)s.%(ext)s'),
         'quiet': True,
         'no_warnings': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
     }
+
+    if not stream_url:
+        # Se recorreu ao URL original do YouTube, aplica os argumentos para o client android/web
+        ydl_opts['extractor_args'] = {'youtube': {'player_client': ['android', 'web']}}
 
     if tipo == 'audio':
         ydl_opts['format'] = 'ba'
@@ -268,11 +302,11 @@ def download_file():
             'preferredquality': '192',
         }]
     else:
-        ydl_opts['format'] = 'bv*+ba/b'
+        ydl_opts['format'] = 'best' if stream_url else 'bv*+ba/b'
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+            info = ydl.extract_info(target_url, download=True)
             filename = ydl.prepare_filename(info)
             if tipo == 'audio':
                 filename = os.path.splitext(filename)[0] + '.mp3'
