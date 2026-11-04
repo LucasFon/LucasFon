@@ -66,7 +66,7 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
-    <!-- Script de Integração -->
+    <!-- Script de Integração com Download Direto via Blob -->
     <script>
         const API_BASE = window.location.origin;
         let currentUrl = "";
@@ -120,7 +120,7 @@ HTML_TEMPLATE = """
 
             statusMessage.classList.remove("hidden", "text-red-600");
             statusMessage.classList.add("text-gray-700");
-            statusMessage.innerText = "A preparar o link de download do áudio... Aguarde.";
+            statusMessage.innerText = "A descarregar o áudio diretamente... Por favor, aguarde.";
 
             btnAudio.disabled = true;
 
@@ -134,18 +134,24 @@ HTML_TEMPLATE = """
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.error || "Erro ao descarregar o áudio.");
+                    throw new Error(data.error || "Erro ao obter o link de áudio.");
                 }
 
+                // Descarrega o ficheiro diretamente em segundo plano usando Blob
+                statusMessage.innerText = "A preparar o ficheiro para gravação...";
+                const streamResponse = await fetch(data.download_link);
+                const blob = await streamResponse.blob();
+                
+                const blobUrl = window.URL.createObjectURL(blob);
                 const link = document.createElement("a");
-                link.href = data.download_link;
-                link.setAttribute("download", data.filename);
-                link.setAttribute("target", "_blank");
+                link.href = blobUrl;
+                link.download = data.filename;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+                window.URL.revokeObjectURL(blobUrl);
 
-                statusMessage.innerText = "Download do MP3 iniciado com sucesso!";
+                statusMessage.innerText = "Download concluído com sucesso!";
 
             } catch (err) {
                 statusMessage.classList.remove("text-gray-700");
@@ -248,7 +254,6 @@ def download_file():
                 vid_data = response.json()
                 video_title = vid_data.get('title', 'audio').replace('/', '_').replace('\\', '_')
                 
-                # Procura especificamente pelo stream de áudio de alta qualidade
                 adaptive = vid_data.get('adaptiveFormats', [])
                 for fmt in adaptive:
                     if 'audio' in fmt.get('type', ''):
