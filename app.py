@@ -241,10 +241,16 @@ def download_file():
     audio_url = None
     video_title = "audio"
 
-    # Percorre instâncias ativas do Invidious para encontrar o stream de áudio
+    # Cabeçalhos para simular um browser real e evitar bloqueios na requisição do stream
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.5'
+    }
+
     for instance in instances[:10]:
         try:
-            response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=5)
+            response = requests.get(f"{instance}/api/v1/videos/{video_id}", headers=headers, timeout=5)
             if response.status_code == 200:
                 vid_data = response.json()
                 video_title = vid_data.get('title', 'audio').replace('/', '_').replace('\\', '_')
@@ -266,8 +272,8 @@ def download_file():
         filename = f"{video_id}.mp3"
         file_path = os.path.join(DOWNLOAD_FOLDER, filename)
 
-        # Descarrega o áudio através do stream limpo do Invidious
-        r = requests.get(audio_url, stream=True, timeout=40)
+        # Descarrega o áudio enviando os cabeçalhos para o servidor de origem
+        r = requests.get(audio_url, headers=headers, stream=True, timeout=45)
         if r.status_code == 200:
             with open(file_path, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=16384):
